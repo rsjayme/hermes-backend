@@ -3,9 +3,10 @@ import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { LeadModule } from '../lead/lead.module';
+import { WhatsAppModule } from '../whatsapp/whatsapp.module';
 
 @Module({
-  imports: [PrismaModule, forwardRef(() => LeadModule)],
+  imports: [PrismaModule, forwardRef(() => LeadModule), WhatsAppModule],
   controllers: [WebhookController],
   providers: [WebhookService],
 })

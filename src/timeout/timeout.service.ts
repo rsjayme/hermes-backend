@@ -8,20 +8,27 @@ export class TimeoutService {
   private readonly timeoutMinutes: number;
 
   constructor(private configService: ConfigService) {
-    this.timeoutMinutes = parseInt(this.configService.get('TIMEOUT_MINUTES') || '5');
+    this.timeoutMinutes = parseInt(
+      this.configService.get('TIMEOUT_MINUTES') || '5',
+    );
   }
 
   createTimeout(interacaoId: string, callback: () => void): void {
     this.clearTimeout(interacaoId);
-    
-    const timeout = setTimeout(() => {
-      this.logger.log(`Timeout executado para interação: ${interacaoId}`);
-      callback();
-      this.timeouts.delete(interacaoId);
-    }, this.timeoutMinutes * 60 * 1000);
+
+    const timeout = setTimeout(
+      () => {
+        this.logger.log(`Timeout executado para interação: ${interacaoId}`);
+        callback();
+        this.timeouts.delete(interacaoId);
+      },
+      this.timeoutMinutes * 60 * 1000,
+    );
 
     this.timeouts.set(interacaoId, timeout);
-    this.logger.log(`Timeout criado para interação: ${interacaoId} (${this.timeoutMinutes} minutos)`);
+    this.logger.log(
+      `Timeout criado para interação: ${interacaoId} (${this.timeoutMinutes} minutos)`,
+    );
   }
 
   clearTimeout(interacaoId: string): void {

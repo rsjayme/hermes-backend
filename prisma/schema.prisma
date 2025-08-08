@@ -13,10 +13,15 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Cargo {
+  ADMIN
+  CLIENT
+}
+
 model Corretor {
   id          String   @id @default(uuid())
   nome        String
-  telefone    String   @unique
+  telefone    String
   ativo       Boolean  @default(true)
   posicaoFila Int      @map("posicao_fila")
   createdAt   DateTime @default(now()) @map("created_at")
@@ -56,4 +61,17 @@ model Interacao {
   corretor   Corretor @relation(fields: [corretorId], references: [id])
   
   @@map("interacoes")
+}
+
+model Usuario {
+  id        String   @id @default(uuid())
+  nome      String
+  email     String   @unique
+  senha     String
+  cargo     Cargo
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("usuarios")
 }

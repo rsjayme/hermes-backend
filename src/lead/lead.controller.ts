@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Put, Param, Body, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Param,
+  Body,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { LeadService } from './lead.service';
 
 @Controller('leads')
@@ -30,21 +39,35 @@ export class LeadController {
       await this.leadService.processarNovoLead(id);
       return { message: 'Lead processado com sucesso' };
     } catch (error) {
-      throw new HttpException('Erro ao processar lead', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(
+        'Erro ao processar lead',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
   @Post('processar-resposta')
-  async processarResposta(@Body() data: { telefone: string; resposta: string }) {
+  async processarResposta(
+    @Body() data: { telefone: string; resposta: string },
+  ) {
     if (!data.telefone || !data.resposta) {
-      throw new HttpException('Telefone e resposta são obrigatórios', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        'Telefone e resposta são obrigatórios',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     try {
-      await this.leadService.processarRespostaCorretor(data.telefone, data.resposta);
+      await this.leadService.processarRespostaCorretor(
+        data.telefone,
+        data.resposta,
+      );
       return { message: 'Resposta processada com sucesso' };
     } catch (error) {
-      throw new HttpException('Erro ao processar resposta', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(
+        'Erro ao processar resposta',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 }

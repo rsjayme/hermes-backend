@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CorretorService } from '../corretor/corretor.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { TimeoutService } from '../timeout/timeout.service';
-import { Lead, Corretor, Interacao } from '@prisma/client';
+import { Lead, Corretor } from '@prisma/client';
 
 @Injectable()
 export class LeadService {
@@ -13,16 +13,16 @@ export class LeadService {
     private prisma: PrismaService,
     private corretorService: CorretorService,
     private whatsappService: WhatsAppService,
-    private timeoutService: TimeoutService
-  ) {}
+    private timeoutService: TimeoutService,
+  ) { }
 
   async findAll(): Promise<Lead[]> {
     return this.prisma.lead.findMany({
       include: {
         corretor: true,
-        interacoes: true
+        interacoes: true,
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -31,8 +31,8 @@ export class LeadService {
       where: { id },
       include: {
         corretor: true,
-        interacoes: true
-      }
+        interacoes: true,
+      },
     });
   }
 
@@ -65,7 +65,10 @@ export class LeadService {
     await this.enviarPerguntaParaCorretor(lead, corretor);
   }
 
-  private async enviarPerguntaParaCorretor(lead: Lead, corretor: Corretor): Promise<void> {
+  private async enviarPerguntaParaCorretor(
+    lead: Lead,
+    corretor: Corretor,
+  ): Promise<void> {
     this.logger.log(`Enviando pergunta para corretor: ${corretor.nome}`);
 
     // Criar interação
@@ -73,21 +76,23 @@ export class LeadService {
       data: {
         leadId: lead.id,
         corretorId: corretor.id,
-        status: 'enviado'
-      }
+        status: 'enviado',
+      },
     });
 
     // Enviar mensagem perguntando disponibilidade
     const sucesso = await this.whatsappService.perguntarDisponibilidade(
       corretor.telefone,
-      corretor.nome
+      corretor.nome,
     );
 
     if (!sucesso) {
-      this.logger.error(`Erro ao enviar mensagem para corretor: ${corretor.nome}`);
+      this.logger.error(
+        `Erro ao enviar mensagem para corretor: ${corretor.nome}`,
+      );
       await this.prisma.interacao.update({
         where: { id: interacao.id },
-        data: { status: 'erro' }
+        data: { status: 'erro' },
       });
       return;
     }
@@ -105,8 +110,8 @@ export class LeadService {
       where: { id: interacaoId },
       include: {
         lead: true,
-        corretor: true
-      }
+        corretor: true,
+      },
     });
 
     if (!interacao) {
@@ -115,7 +120,9 @@ export class LeadService {
     }
 
     if (interacao.status !== 'enviado') {
-      this.logger.log(`Interação ${interacaoId} já foi processada: ${interacao.status}`);
+      this.logger.log(
+        `Interação ${interacaoId} já foi processada: ${interacao.status}`,
+      );
       return;
     }
 
@@ -124,21 +131,26 @@ export class LeadService {
       where: { id: interacaoId },
       data: {
         status: 'timeout',
-        timeoutEm: new Date()
-      }
+        timeoutEm: new Date(),
+      },
     });
 
     // Mover corretor para final da fila
     await this.corretorService.moverParaFinalDaFila(interacao.corretorId);
 
     // Notificar corretor sobre timeout
-    await this.whatsappService.notificarLeadTimeout(interacao.corretor.telefone);
+    await this.whatsappService.notificarLeadTimeout(
+      interacao.corretor.telefone,
+    );
 
     // Tentar próximo corretor
     await this.tentarAtribuirLead(interacao.lead);
   }
 
-  async processarRespostaCorretor(telefone: string, resposta: string): Promise<void> {
+  async processarRespostaCorretor(
+    telefone: string,
+    resposta: string,
+  ): Promise<void> {
     this.logger.log(`Processando resposta do corretor: ${telefone}`);
 
     const corretor = await this.corretorService.findByTelefone(telefone);
@@ -151,71 +163,77 @@ export class LeadService {
     const interacao = await this.prisma.interacao.findFirst({
       where: {
         corretorId: corretor.id,
-        status: 'enviado'
+        status: 'enviado',
       },
       include: {
-        lead: true
+        lead: true,
       },
-      orderBy: { enviadoEm: 'desc' }
+      orderBy: { enviadoEm: 'desc' },
     });
 
     if (!interacao) {
-      this.logger.warn(`Nenhuma interação pendente para corretor: ${corretor.nome}`);
+      this.logger.warn(
+        `Nenhuma interação pendente para corretor: ${corretor.nome}`,
+      );
       return;
     }
 
-    // Cancelar timeout
-    this.timeoutService.clearTimeout(interacao.id);
-
     // Determinar resposta
-    const aceitou = this.analisarResposta(resposta);
+    const respostaAnalisada = this.analisarResposta(resposta);
 
+    // Se a resposta é inválida (null), ignora e mantém a interação ativa
+    if (respostaAnalisada === null) {
+      this.logger.log(
+        `Resposta inválida do corretor ${corretor.nome}: "${resposta}". Mensagem ignorada.`,
+      );
+      return;
+    }
+
+    // Cancelar timeout apenas quando há resposta válida
+    this.timeoutService.clearTimeout(interacao.id);
     await this.prisma.interacao.update({
       where: { id: interacao.id },
       data: {
-        status: aceitou ? 'respondido_sim' : 'respondido_nao',
-        respondidoEm: new Date()
-      }
+        status: respostaAnalisada ? 'respondido_sim' : 'respondido_nao',
+        respondidoEm: new Date(),
+      },
     });
 
-    if (aceitou) {
+    if (respostaAnalisada) {
       await this.atribuirLeadAoCorretor(interacao.lead, corretor);
     } else {
       // Notificar corretor que recusou o lead
       await this.whatsappService.notificarLeadRecusado(corretor.telefone);
-      
+
       // Mover corretor para final da fila
       await this.corretorService.moverParaFinalDaFila(corretor.id);
-      
+
       // Tentar próximo corretor
       await this.tentarAtribuirLead(interacao.lead);
     }
   }
 
-  private analisarResposta(resposta: string): boolean {
-    const respostaLower = resposta.toLowerCase();
-    
-    const palavrasPositivas = ['sim', 'aceito', 'ok', 'aceitar', 'quero', 'vou'];
-    const palavrasNegativas = ['não', 'nao', 'recuso', 'não posso', 'nao posso', 'ocupado'];
+  private analisarResposta(resposta: string): boolean | null {
+    const respostaNormalizada = resposta.trim().toLowerCase();
 
-    const temPositiva = palavrasPositivas.some(palavra => respostaLower.includes(palavra));
-    const temNegativa = palavrasNegativas.some(palavra => respostaLower.includes(palavra));
-
-    // Se tem palavra positiva e não tem negativa = aceita
-    if (temPositiva && !temNegativa) {
+    // Aceita apenas "sim" como resposta positiva
+    if (respostaNormalizada === 'sim') {
       return true;
     }
 
-    // Se tem palavra negativa = recusa
-    if (temNegativa) {
+    // Aceita "não" ou "nao" como resposta negativa
+    if (respostaNormalizada === 'não' || respostaNormalizada === 'nao') {
       return false;
     }
 
-    // Se não tem nenhuma palavra clara, considera como recusa
-    return false;
+    // Qualquer outra resposta é inválida - não processa
+    return null;
   }
 
-  private async atribuirLeadAoCorretor(lead: Lead, corretor: Corretor): Promise<void> {
+  private async atribuirLeadAoCorretor(
+    lead: Lead,
+    corretor: Corretor,
+  ): Promise<void> {
     this.logger.log(`Atribuindo lead ${lead.id} ao corretor ${corretor.nome}`);
 
     // Atualizar lead
@@ -223,35 +241,38 @@ export class LeadService {
       where: { id: lead.id },
       data: {
         status: 'atribuido',
-        corretorId: corretor.id
-      }
+        corretorId: corretor.id,
+      },
     });
 
     // Enviar dados do lead para o corretor
     await this.whatsappService.enviarDadosLead(corretor.telefone, {
       nome: lead.nome,
-      telefone: lead.telefone
+      telefone: lead.telefone,
     });
 
     // Mover corretor para final da fila
     await this.corretorService.moverParaFinalDaFila(corretor.id);
 
-    this.logger.log(`Lead ${lead.id} atribuído com sucesso ao corretor ${corretor.nome}`);
+    this.logger.log(
+      `Lead ${lead.id} atribuído com sucesso ao corretor ${corretor.nome}`,
+    );
   }
 
   async getEstatisticas() {
-    const [totalLeads, leadsPendentes, leadsAtribuidos, leadsFinalizados] = await Promise.all([
-      this.prisma.lead.count(),
-      this.prisma.lead.count({ where: { status: 'pendente' } }),
-      this.prisma.lead.count({ where: { status: 'atribuido' } }),
-      this.prisma.lead.count({ where: { status: 'finalizado' } })
-    ]);
+    const [totalLeads, leadsPendentes, leadsAtribuidos, leadsFinalizados] =
+      await Promise.all([
+        this.prisma.lead.count(),
+        this.prisma.lead.count({ where: { status: 'pendente' } }),
+        this.prisma.lead.count({ where: { status: 'atribuido' } }),
+        this.prisma.lead.count({ where: { status: 'finalizado' } }),
+      ]);
 
     const interacoesPorStatus = await this.prisma.interacao.groupBy({
       by: ['status'],
       _count: {
-        status: true
-      }
+        status: true,
+      },
     });
 
     return {
@@ -259,12 +280,12 @@ export class LeadService {
         total: totalLeads,
         pendentes: leadsPendentes,
         atribuidos: leadsAtribuidos,
-        finalizados: leadsFinalizados
+        finalizados: leadsFinalizados,
       },
       interacoes: interacoesPorStatus.reduce((acc, item) => {
         acc[item.status] = item._count.status;
         return acc;
-      }, {})
+      }, {}),
     };
   }
 }

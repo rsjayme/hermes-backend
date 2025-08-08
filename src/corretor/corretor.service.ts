@@ -10,13 +10,13 @@ export class CorretorService {
 
   async findAll(): Promise<Corretor[]> {
     return this.prisma.corretor.findMany({
-      orderBy: { posicaoFila: 'asc' }
+      orderBy: { posicaoFila: 'asc' },
     });
   }
 
   async findById(id: string): Promise<Corretor | null> {
     return this.prisma.corretor.findUnique({
-      where: { id }
+      where: { id },
     });
   }
 
@@ -24,13 +24,13 @@ export class CorretorService {
     const telefoneNormalizado = this.normalizarTelefone(telefone);
     const telefoneSem9 = this.removerNove(telefoneNormalizado);
 
+    // Busca o primeiro corretor ativo com esse telefone (pode haver múltiplos)
     return this.prisma.corretor.findFirst({
       where: {
-        OR: [
-          { telefone: telefoneNormalizado },
-          { telefone: telefoneSem9 }
-        ]
-      }
+        OR: [{ telefone: telefoneNormalizado }, { telefone: telefoneSem9 }],
+        ativo: true,
+      },
+      orderBy: { posicaoFila: 'asc' },
     });
   }
 
@@ -41,25 +41,25 @@ export class CorretorService {
     // Verificar se telefone já existe como lead (ambas as versões)
     const leadExistente = await this.prisma.lead.findFirst({
       where: {
-        OR: [
-          { telefone: telefoneNormalizado },
-          { telefone: telefoneSem9 }
-        ]
-      }
+        OR: [{ telefone: telefoneNormalizado }, { telefone: telefoneSem9 }],
+      },
     });
 
     if (leadExistente) {
-      throw new Error(`Telefone ${data.telefone} já está cadastrado como lead. Um corretor não pode ter o mesmo telefone de um lead.`);
+      throw new Error(
+        `Telefone ${data.telefone} já está cadastrado como lead. Um corretor não pode ter o mesmo telefone de um lead.`,
+      );
     }
 
     const ultimaPosicao = await this.getUltimaPosicaoFila();
-    
+
+    // Agora permite múltiplos corretores com o mesmo telefone
     return this.prisma.corretor.create({
       data: {
         nome: data.nome,
         telefone: telefoneNormalizado, // Sempre salvar normalizado
-        posicaoFila: ultimaPosicao + 1
-      }
+        posicaoFila: ultimaPosicao + 1,
+      },
     });
   }
 
@@ -73,31 +73,31 @@ export class CorretorService {
 
       const leadExistente = await this.prisma.lead.findFirst({
         where: {
-          OR: [
-            { telefone: telefoneNormalizado },
-            { telefone: telefoneSem9 }
-          ]
-        }
+          OR: [{ telefone: telefoneNormalizado }, { telefone: telefoneSem9 }],
+        },
       });
 
       if (leadExistente) {
-        throw new Error(`Telefone ${data.telefone} já está cadastrado como lead. Um corretor não pode ter o mesmo telefone de um lead.`);
+        throw new Error(
+          `Telefone ${data.telefone} já está cadastrado como lead. Um corretor não pode ter o mesmo telefone de um lead.`,
+        );
       }
 
       updateData.telefone = telefoneNormalizado; // Sempre salvar normalizado
     }
 
+    // Agora permite múltiplos corretores com o mesmo telefone
     return this.prisma.corretor.update({
       where: { id },
-      data: updateData
+      data: updateData,
     });
   }
 
   async delete(id: string): Promise<void> {
     await this.prisma.corretor.delete({
-      where: { id }
+      where: { id },
     });
-    
+
     // Reordenar posições na fila
     await this.reordernarFila();
   }
@@ -105,7 +105,7 @@ export class CorretorService {
   async getProximoNaFila(): Promise<Corretor | null> {
     const corretor = await this.prisma.corretor.findFirst({
       where: { ativo: true },
-      orderBy: { posicaoFila: 'asc' }
+      orderBy: { posicaoFila: 'asc' },
     });
 
     if (!corretor) {
@@ -113,7 +113,9 @@ export class CorretorService {
       return null;
     }
 
-    this.logger.log(`Próximo corretor na fila: ${corretor.nome} (posição: ${corretor.posicaoFila})`);
+    this.logger.log(
+      `Próximo corretor na fila: ${corretor.nome} (posição: ${corretor.posicaoFila})`,
+    );
     return corretor;
   }
 
@@ -124,16 +126,16 @@ export class CorretorService {
     }
 
     const ultimaPosicao = await this.getUltimaPosicaoFila();
-    
+
     // Mover corretor para o final da fila
     await this.prisma.corretor.update({
       where: { id: corretorId },
-      data: { posicaoFila: ultimaPosicao + 1 }
+      data: { posicaoFila: ultimaPosicao + 1 },
     });
 
     // Reordenar todas as posições
     await this.reordernarFila();
-    
+
     this.logger.log(`Corretor ${corretor.nome} movido para o final da fila`);
   }
 
@@ -145,13 +147,13 @@ export class CorretorService {
 
     return this.prisma.corretor.update({
       where: { id },
-      data: { ativo: !corretor.ativo }
+      data: { ativo: !corretor.ativo },
     });
   }
 
   private async getUltimaPosicaoFila(): Promise<number> {
     const corretor = await this.prisma.corretor.findFirst({
-      orderBy: { posicaoFila: 'desc' }
+      orderBy: { posicaoFila: 'desc' },
     });
 
     return corretor?.posicaoFila || 0;
@@ -159,13 +161,13 @@ export class CorretorService {
 
   private async reordernarFila(): Promise<void> {
     const corretores = await this.prisma.corretor.findMany({
-      orderBy: { posicaoFila: 'asc' }
+      orderBy: { posicaoFila: 'asc' },
     });
 
     for (let i = 0; i < corretores.length; i++) {
       await this.prisma.corretor.update({
         where: { id: corretores[i].id },
-        data: { posicaoFila: i + 1 }
+        data: { posicaoFila: i + 1 },
       });
     }
 
@@ -174,54 +176,54 @@ export class CorretorService {
 
   async getStatusFila() {
     const corretores = await this.findAll();
-    const ativos = corretores.filter(c => c.ativo);
-    const inativos = corretores.filter(c => !c.ativo);
+    const ativos = corretores.filter((c) => c.ativo);
+    const inativos = corretores.filter((c) => !c.ativo);
 
     return {
       total: corretores.length,
       ativos: ativos.length,
       inativos: inativos.length,
-      fila: ativos.map(c => ({
+      fila: ativos.map((c) => ({
         id: c.id,
         nome: c.nome,
         telefone: c.telefone,
-        posicao: c.posicaoFila
-      }))
+        posicao: c.posicaoFila,
+      })),
     };
   }
 
   private normalizarTelefone(telefone: string): string {
     // Remove caracteres não numéricos
     const numeroLimpo = telefone.replace(/\D/g, '');
-    
+
     // Se tem 13 dígitos (55 + DDD + 9 + 8 dígitos), manter como está
     if (numeroLimpo.length === 13) {
       return numeroLimpo;
     }
-    
+
     // Se tem 12 dígitos (55 + DDD + 8 dígitos), adicionar o 9
     if (numeroLimpo.length === 12) {
       // Extrair código do país (55) + DDD (2 dígitos) + número (8 dígitos)
       const codigoPais = numeroLimpo.substring(0, 2); // 55
       const ddd = numeroLimpo.substring(2, 4); // 62
       const numero = numeroLimpo.substring(4); // 81804477
-      
+
       // Adicionar o 9 antes do número
       return `${codigoPais}${ddd}9${numero}`;
     }
-    
+
     // Se tem 11 dígitos (DDD + 9 + 8 dígitos), adicionar 55
     if (numeroLimpo.length === 11) {
       return `55${numeroLimpo}`;
     }
-    
+
     // Se tem 10 dígitos (DDD + 8 dígitos), adicionar 55 + 9
     if (numeroLimpo.length === 10) {
       const ddd = numeroLimpo.substring(0, 2);
       const numero = numeroLimpo.substring(2);
       return `55${ddd}9${numero}`;
     }
-    
+
     // Retornar como está se não se encaixa nos padrões
     return numeroLimpo;
   }

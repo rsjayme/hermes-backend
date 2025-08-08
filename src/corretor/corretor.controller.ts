@@ -1,9 +1,19 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { CorretorService } from './corretor.service';
 
 @Controller('corretores')
 export class CorretorController {
-  constructor(private readonly corretorService: CorretorService) { }
+  constructor(private readonly corretorService: CorretorService) {}
 
   @Get()
   async findAll() {
@@ -27,16 +37,20 @@ export class CorretorController {
   @Post()
   async create(@Body() data: { nome: string; telefone: string }) {
     if (!data.nome || !data.telefone) {
-      throw new HttpException('Nome e telefone são obrigatórios', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        'Nome e telefone são obrigatórios',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     try {
       return await this.corretorService.create(data);
     } catch (error) {
-      if (error.code === 'P2002') {
-        throw new HttpException('Telefone já cadastrado', HttpStatus.CONFLICT);
-      }
-      throw new HttpException('Erro ao criar corretor', HttpStatus.INTERNAL_SERVER_ERROR);
+      // Remover tratamento P2002 pois agora permite telefones duplicados
+      throw new HttpException(
+        error.message || 'Erro ao criar corretor',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -46,9 +60,15 @@ export class CorretorController {
       return await this.corretorService.update(id, data);
     } catch (error) {
       if (error.code === 'P2025') {
-        throw new HttpException('Corretor não encontrado', HttpStatus.NOT_FOUND);
+        throw new HttpException(
+          'Corretor não encontrado',
+          HttpStatus.NOT_FOUND,
+        );
       }
-      throw new HttpException('Erro ao atualizar corretor', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(
+        'Erro ao atualizar corretor',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -57,7 +77,10 @@ export class CorretorController {
     try {
       return await this.corretorService.toggleAtivo(id);
     } catch (error) {
-      throw new HttpException('Erro ao alterar status do corretor', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(
+        'Erro ao alterar status do corretor',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -67,7 +90,10 @@ export class CorretorController {
       await this.corretorService.moverParaFinalDaFila(id);
       return { message: 'Corretor movido para o final da fila' };
     } catch (error) {
-      throw new HttpException('Erro ao mover corretor na fila', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(
+        'Erro ao mover corretor na fila',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -78,9 +104,15 @@ export class CorretorController {
       return { message: 'Corretor removido com sucesso' };
     } catch (error) {
       if (error.code === 'P2025') {
-        throw new HttpException('Corretor não encontrado', HttpStatus.NOT_FOUND);
+        throw new HttpException(
+          'Corretor não encontrado',
+          HttpStatus.NOT_FOUND,
+        );
       }
-      throw new HttpException('Erro ao remover corretor', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(
+        'Erro ao remover corretor',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 }

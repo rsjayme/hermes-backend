@@ -1,12 +1,14 @@
 import { Controller, Post, Body, Logger } from '@nestjs/common';
 import { WebhookService } from './webhook.service';
+import { Public } from '../auth/decorators/public.decorator';
 
 @Controller('webhook')
 export class WebhookController {
   private readonly logger = new Logger(WebhookController.name);
 
-  constructor(private readonly webhookService: WebhookService) { }
+  constructor(private readonly webhookService: WebhookService) {}
 
+  @Public()
   @Post('messages')
   async handleMessage(@Body() payload: any) {
     this.logger.log('Webhook recebido:', JSON.stringify(payload, null, 2));
