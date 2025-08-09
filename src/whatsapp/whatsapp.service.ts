@@ -65,7 +65,7 @@ export class WhatsAppService {
   ): Promise<boolean> {
     const mensagem = `Olá ${nomeCorretor}! 👋
 
-Temos um novo lead disponível para atendimento.
+Temos um novo lead.
 
 Você está disponível para atender agora?
 
@@ -97,12 +97,10 @@ Entre em contato com o cliente o mais rápido possível! 🚀`;
 
   async enviarMensagemBoasVindas(telefone: string, nome?: string): Promise<boolean> {
     const saudacao = nome ? `Olá, ${nome}!` : 'Olá!';
-    
+
     const mensagem = `${saudacao} 👋
 
-Obrigado por entrar em contato conosco!
-
-Sua mensagem foi recebida e em breve um dos nossos corretores entrará em contato com você.
+Em breve um de nossos corretores entrará em contato com você.
 
 Aguarde apenas alguns instantes! 😊`;
 
@@ -206,7 +204,7 @@ O lead foi direcionado para o próximo corretor da fila.
       // Detectar mimetype baseado na extensão
       const extensao = path.extname(caminhoArquivo).toLowerCase();
       let mimetype = 'application/octet-stream'; // padrão
-      
+
       switch (extensao) {
         case '.pdf':
           mimetype = 'application/pdf';
@@ -261,11 +259,68 @@ O lead foi direcionado para o próximo corretor da fila.
     }
   }
 
-  async enviarApresentacaoReservaDosBosque(telefone: string): Promise<boolean> {
-    const caminhoArquivo = '/home/raphael/code/mgv-msg-handler/mgv-msg-handler/files/APRESENTAÇÃO RESERVA DO BOSQUE.pdf';
-    const nomeArquivo = 'APRESENTAÇÃO RESERVA DO BOSQUE.pdf';
-    const caption = '📋 Confira nossa apresentação da Reserva do Bosque! Todas as informações estão aqui. 🌳';
+  async enviarDocumentoViaUrl(
+    telefone: string,
+    url: string,
+    nomeArquivo: string,
+    mimetype: string,
+    caption?: string,
+  ): Promise<boolean> {
+    try {
+      const urlEndpoint = `${this.apiUrl}/message/sendMedia/${this.instanceName}`;
 
-    return await this.enviarDocumento(telefone, caminhoArquivo, nomeArquivo, caption);
+      const payload = {
+        number: telefone,
+        mediatype: 'document',
+        mimetype: mimetype,
+        media: url,
+        fileName: nomeArquivo,
+        ...(caption && { caption }),
+      };
+
+      const response = await axios.post(urlEndpoint, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: this.apiKey,
+        },
+      });
+
+      if (response.status >= 200 && response.status < 300) {
+        this.logger.log(
+          `Documento via URL enviado com sucesso para: ${telefone} (${nomeArquivo}) - Status: ${response.status}`,
+        );
+        return true;
+      } else {
+        this.logger.error(
+          `Erro ao enviar documento via URL para ${telefone}: ${response.status} - ${response.statusText}`,
+        );
+        return false;
+      }
+    } catch (error) {
+      this.logger.error(
+        `Erro ao enviar documento via URL para ${telefone}:`,
+        error.message,
+      );
+      return false;
+    }
+  }
+
+  async enviarApresentacaoReservaDosBosque(telefone: string): Promise<boolean> {
+    const url =
+      'https://supremamkt.com.br/APRESENTA%C3%87%C3%83O%20RESERVA%20DO%20BOSQUE.pdf';
+    const nomeArquivo = 'APRESENTAÇÃO RESERVA DO BOSQUE.pdf';
+    const mimetype = 'application/pdf';
+    const caption =
+      `Enquanto isso, que tal conferir nossa apresentação do Reserva do Bosque? 
+      
+      Todas as informações estão aqui. 🌳`;
+
+    return await this.enviarDocumentoViaUrl(
+      telefone,
+      url,
+      nomeArquivo,
+      mimetype,
+      caption,
+    );
   }
 }
